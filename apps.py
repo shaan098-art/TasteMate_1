@@ -219,18 +219,26 @@ with tabs[1]:
             "only one class after filtering."
         )
     else:
-        # binarise y_test → 0/1
         lb = LabelBinarizer()
         y_test_bin = lb.fit_transform(y_test).ravel()
-
-        # choose the positive class (lb.classes_[1])
         pos_class = lb.classes_[1]
 
         roc_fig = go.Figure()
+        skipped = []
+
         for name, mdl in models.items():
-            # index of positive class in model.classes_
+            # If the positive class wasn’t seen in training, skip
+            if pos_class not in mdl.classes_:
+                skipped.append(name)
+                continue
+
             pos_idx = list(mdl.classes_).index(pos_class)
             probs = mdl.predict_proba(X_test)[:, pos_idx]
+
+            # Guard: ensure length match
+            if len(probs) != len(y_test_bin):
+                skipped.append(name)
+                continue
 
             fpr, tpr, _ = roc_curve(y_test_bin, probs, pos_label=1)
             roc_fig.add_trace(
@@ -242,12 +250,17 @@ with tabs[1]:
                 )
             )
 
-        roc_fig.update_layout(
-            xaxis_title="False Positive Rate",
-            yaxis_title="True Positive Rate",
-            title="ROC Curves",
-        )
-        st.plotly_chart(roc_fig, use_container_width=True)
+        if roc_fig.data:  # at least one line added
+            roc_fig.update_layout(
+                xaxis_title="False Positive Rate",
+                yaxis_title="True Positive Rate",
+                title="ROC Curves",
+            )
+            st.plotly_chart(roc_fig, use_container_width=True)
+        else:
+            st.info("No models could be plotted on the ROC curve.")
+        if skipped:
+            st.caption(f"Skipped ROC for: {', '.join(skipped)} (length/class mismatch)")
 
     # -------- New-data predictions ------------------------------
     st.subheader("Predict New Data")
