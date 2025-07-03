@@ -211,7 +211,8 @@ with tabs[1]:
     cm = confusion_matrix(y_test, models[chosen_model].predict(X_test), labels=labels_present)
     st.plotly_chart(plot_conf_matrix(cm, labels_present), use_container_width=True)
 
-     st.subheader("ROC Curve Comparison")
+      # -------- ROC Curves (only if test set has both classes) -----
+    st.subheader("ROC Curve Comparison")
     if len(np.unique(y_test)) < 2:
         st.info(
             "ROC curve cannot be plotted because the test set contains "
