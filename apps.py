@@ -8,6 +8,7 @@
 
 import io
 from datetime import datetime
+from sklearn.preprocessing import LabelBinarizer
 
 import numpy as np
 import pandas as pd
@@ -210,21 +211,36 @@ with tabs[1]:
     cm = confusion_matrix(y_test, models[chosen_model].predict(X_test), labels=labels_present)
     st.plotly_chart(plot_conf_matrix(cm, labels_present), use_container_width=True)
 
-    # -------- ROC Curves (only if test set has both classes) -----
-    st.subheader("ROC Curve Comparison")
+     st.subheader("ROC Curve Comparison")
     if len(np.unique(y_test)) < 2:
-        st.info("ROC curve cannot be plotted because the test set contains only one class after filtering.")
+        st.info(
+            "ROC curve cannot be plotted because the test set contains "
+            "only one class after filtering."
+        )
     else:
+        # binarise y_test → 0/1
+        lb = LabelBinarizer()
+        y_test_bin = lb.fit_transform(y_test).ravel()
+
+        # choose the positive class (lb.classes_[1])
+        pos_class = lb.classes_[1]
+
         roc_fig = go.Figure()
         for name, mdl in models.items():
-            probs = mdl.predict_proba(X_test)[:, 1]
-            fpr, tpr, _ = roc_curve(y_test, probs)
+            # index of positive class in model.classes_
+            pos_idx = list(mdl.classes_).index(pos_class)
+            probs = mdl.predict_proba(X_test)[:, pos_idx]
+
+            fpr, tpr, _ = roc_curve(y_test_bin, probs, pos_label=1)
             roc_fig.add_trace(
                 go.Scatter(
-                    x=fpr, y=tpr, mode="lines",
-                    name=f"{name} (AUC={auc(fpr, tpr):.2f})"
+                    x=fpr,
+                    y=tpr,
+                    mode="lines",
+                    name=f"{name} (AUC={auc(fpr, tpr):.2f})",
                 )
             )
+
         roc_fig.update_layout(
             xaxis_title="False Positive Rate",
             yaxis_title="True Positive Rate",
