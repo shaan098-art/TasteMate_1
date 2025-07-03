@@ -323,40 +323,66 @@ with tabs[2]:
     )
 
 # ------------------------------------------------------------------
-# 4 – Association Rules
+# 4 – Association Rules   
 # ------------------------------------------------------------------
 with tabs[3]:
     st.header("Market Basket / Association Rule Mining")
 
+    # ① Let the user pick ANY ≥2 categorical columns
     cat_cols = df_filtered.select_dtypes(include="object").columns.tolist()
-    st.info("Select exactly **two** categorical columns to build transactions.")
-    assoc_cols = st.multiselect("Choose two columns", cat_cols, default=cat_cols[:2])
+    st.info("Select **two or more** categorical columns to mine cross-attribute patterns.")
+    assoc_cols = st.multiselect("Choose columns", cat_cols, default=cat_cols[:3])
 
-    if len(assoc_cols) == 2:
-        transactions = (
-            df_filtered[assoc_cols]
-            .astype(str)
-            .apply(lambda x: "_".join(x), axis=1)
-            .to_frame(name="item")
-        )
-        one_hot = transactions["item"].str.get_dummies()
+    if len(assoc_cols) < 2:
+        st.warning("Please select at least two categorical columns.")
+    else:
+        # ② One-hot encode each col=value pair → suitable for apriori
+        trans_ohe = pd.get_dummies(df_filtered[assoc_cols].astype(str))
 
+        # ③ User-tunable thresholds
         min_sup = st.slider("Min support", 0.01, 0.5, 0.05, 0.01)
-        min_conf = st.slider("Min confidence", 0.1, 1.0, 0.6, 0.05)
+        min_conf = st.slider("Min confidence", 0.10, 1.00, 0.60, 0.05)
         min_lift = st.slider("Min lift", 1.0, 10.0, 1.0, 0.1)
 
-        frequent = apriori(one_hot, min_support=min_sup, use_colnames=True)
-        rules = association_rules(frequent, metric="confidence", min_threshold=min_conf)
-        rules = rules[rules["lift"] >= min_lift]
-        rules = rules.sort_values("confidence", ascending=False).head(10).reset_index(drop=True)
+        # ④ Mine frequent itemsets
+        frequent = apriori(trans_ohe, min_support=min_sup, use_colnames=True)
 
-        st.subheader("Top-10 Rules")
-        st.dataframe(
-            rules[["antecedents", "consequents", "support", "confidence", "lift"]],
-            use_container_width=True,
-        )
-    else:
-        st.warning("Please select exactly two categorical columns.")
+        if frequent.empty:
+            st.warning(
+                "No frequent itemsets found with the current support threshold. "
+                "Try reducing *Min support* or selecting additional columns."
+            )
+        else:
+            # ⑤ Generate association rules
+            rules = association_rules(
+                frequent, metric="confidence", min_threshold=min_conf
+            )
+            rules = rules[rules["lift"] >= min_lift]
+
+            if rules.empty:
+                st.warning(
+                    "No association rules meet the chosen confidence/lift thresholds."
+                )
+            else:
+                # Human-readable antecedent/consequent strings
+                rules["antecedents"] = rules["antecedents"].apply(
+                    lambda x: ", ".join(list(x))
+                )
+                rules["consequents"] = rules["consequents"].apply(
+                    lambda x: ", ".join(list(x))
+                )
+                rules = (
+                    rules.sort_values("confidence", ascending=False)
+                    .head(10)
+                    .reset_index(drop=True)
+                )
+
+                st.subheader("Top-10 Rules")
+                st.dataframe(
+                    rules[["antecedents", "consequents", "support", "confidence", "lift"]],
+                    use_container_width=True,
+                )
+
 
 # ------------------------------------------------------------------
 # 5 – Regression Insights
