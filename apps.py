@@ -31,7 +31,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 # ------------------------------------------------------------------
 # Page config
 # ------------------------------------------------------------------
-st.set_page_config(page_title="Cloud Kitchen Dashboard", page_icon="🍱", layout="wide")
+st.set_page_config(page_title="TasteMate's Dashboard", page_icon="🍱", layout="wide")
 
 # ------------------------------------------------------------------
 # Data loader
@@ -141,7 +141,7 @@ tabs = st.tabs([
 # 1 – Data Visualisation
 # ------------------------------------------------------------------
 with tabs[0]:
-    st.header("TasteMate - Interactive Exploratory Analysis")
+    st.header("🍝 TasteMate - Interactive Exploratory Analysis")
 
     diet_counts = df_filtered["diet_style"].value_counts().reset_index(name="Count")
     diet_counts.columns = ["Diet Style", "Count"]
