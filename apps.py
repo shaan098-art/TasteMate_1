@@ -37,7 +37,7 @@ from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 # ------------------------------------------------------------------
 # Page config
 # ------------------------------------------------------------------
-st.set_page_config(page_title="Cloud Kitchen Dashboard", page_icon="🍱", layout="wide")
+st.set_page_config(page_title="🍝 TasteMate - Cloud Kitchen Dashboard", page_icon="🍱", layout="wide")
 
 # ------------------------------------------------------------------
 # Data loader
