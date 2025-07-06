@@ -3,12 +3,11 @@
 # Streamlit Cloud Kitchen Dashboard
 # ------------------------------------------------------------------
 # Author: ChatGPT (o3)
-# Last updated: 04-Jul-2025
+# Last updated: 06-Jul-2025
 # ------------------------------------------------------------------
 
 import io
 from datetime import datetime
-from sklearn.preprocessing import LabelBinarizer
 
 import numpy as np
 import pandas as pd
@@ -20,18 +19,25 @@ from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from sklearn.metrics import (accuracy_score, auc, confusion_matrix, f1_score,
-                             precision_score, recall_score, roc_curve)
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_curve,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelBinarizer
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 # ------------------------------------------------------------------
 # Page config
 # ------------------------------------------------------------------
-st.set_page_config(page_title="TasteMate's Dashboard", page_icon="🍱", layout="wide")
+st.set_page_config(page_title="Cloud Kitchen Dashboard", page_icon="🍱", layout="wide")
 
 # ------------------------------------------------------------------
 # Data loader
@@ -79,8 +85,8 @@ def build_classification_models(X: pd.DataFrame, y: pd.Series):
             "Train Acc": model.score(X_train, y_train),
             "Test Acc": accuracy_score(y_test, preds),
             "Precision": precision_score(y_test, preds, average="weighted", zero_division=0),
-            "Recall": recall_score(y_test, preds, average="weighted", zero_division=0),
-            "F1": f1_score(y_test, preds, average="weighted", zero_division=0),
+            "Recall":    recall_score(y_test, preds, average="weighted", zero_division=0),
+            "F1":        f1_score(y_test, preds, average="weighted", zero_division=0),
         }
     return models, metrics
 
@@ -88,7 +94,6 @@ def build_classification_models(X: pd.DataFrame, y: pd.Series):
 # Helper – confusion-matrix plot
 # ------------------------------------------------------------------
 def plot_conf_matrix(cm: np.ndarray, labels: list[str]) -> go.Figure:
-    """Return a Plotly heat-map confusion matrix with dynamic labels."""
     fig = go.Figure(
         data=go.Heatmap(
             z=cm,
@@ -124,56 +129,104 @@ diet_filter = st.sidebar.multiselect(
     "Diet Style", sorted(df["diet_style"].unique()), default=sorted(df["diet_style"].unique())
 )
 
-df_filtered = df[df["gender"].isin(gender_filter) & df["diet_style"].isin(diet_filter)]
+df_filtered = df[
+    df["gender"].isin(gender_filter) & df["diet_style"].isin(diet_filter)
+]
 
 # ------------------------------------------------------------------
 # Tabs
 # ------------------------------------------------------------------
-tabs = st.tabs([
-    "🔎 Data Visualisation",
-    "🤖 Classification",
-    "🧩 Clustering",
-    "🛒 Association Rules",
-    "📈 Regression Insights",
-])
+tabs = st.tabs(
+    ["🔎 Data Visualisation", "🤖 Classification", "🧩 Clustering", "🛒 Association Rules", "📈 Regression Insights"]
+)
 
 # ------------------------------------------------------------------
-# 1 – Data Visualisation
+# 1 – Data Visualisation (updated labels)
 # ------------------------------------------------------------------
 with tabs[0]:
-    st.header("🍝 TasteMate - Interactive Exploratory Analysis")
+    st.header("Interactive Exploratory Analysis")
 
-    diet_counts = df_filtered["diet_style"].value_counts().reset_index(name="Count")
-    diet_counts.columns = ["Diet Style", "Count"]
+    # ─── Mapping codes to human-readable labels ──────────────────────
+    age_labels = {
+        1: "18–24",
+        2: "25–34",
+        3: "35–44",
+        4: "45–54",
+        5: "55–64",
+        6: "65+",
+    }
+    gender_map = {
+        1: "Women",
+        2: "Men",
+        3: "Non-binary",
+        4: "Prefer not to say",
+    }
+    diet_map = {
+        1: "Omnivore",
+        2: "Vegetarian",
+        3: "Vegan",
+        4: "Pescatarian",
+        5: "Keto",
+    }
 
+    # Make a working copy with new label columns
+    viz_df = df_filtered.copy()
+    viz_df["Age Group"] = viz_df["age_group"].map(age_labels)
+    viz_df["Gender"] = viz_df["gender"].map(gender_map)
+    viz_df["Diet Style"] = viz_df["diet_style"].map(diet_map)
+
+    # Prepare Diet Style counts
+    diet_counts = (
+        viz_df["Diet Style"]
+        .value_counts()
+        .reset_index(name="Count")
+        .rename(columns={"index": "Diet Style"})
+    )
+
+    # Build all 10 charts with updated labels
     insights = {
         "Age Distribution": px.histogram(
-            df_filtered, x="age_group",
-            nbins=df_filtered["age_group"].nunique(),
-            labels={"age_group": "Age Group"},
+            viz_df,
+            x="Age Group",
+            category_orders={"Age Group": list(age_labels.values())},
+            labels={"Age Group": "Age Group"},
         ),
-        "Gender Split": px.pie(df_filtered, names="gender", hole=0.4),
+        "Gender Split": px.pie(
+            viz_df,
+            names="Gender",
+            hole=0.4,
+        ),
         "Diet Style Popularity": px.bar(
-            diet_counts, x="Diet Style", y="Count",
+            diet_counts,
+            x="Diet Style",
+            y="Count",
             labels={"Diet Style": "Diet Style", "Count": "Count"},
         ),
         "Spend vs Orders": px.scatter(
-            df_filtered, x="orders_per_week", y="avg_spend_aed",
-            size="avg_spend_aed", color="diet_style",
+            viz_df,
+            x="orders_per_week",
+            y="avg_spend_aed",
+            size="avg_spend_aed",
+            color="Diet Style",
             labels={"orders_per_week": "Orders/Week", "avg_spend_aed": "Avg Spend (AED)"},
         ),
         "Workout vs Goal": px.box(
-            df_filtered, x="fitness_goal", y="workouts_per_week", color="gender",
+            viz_df,
+            x="fitness_goal",
+            y="workouts_per_week",
+            color="Gender",
             labels={"fitness_goal": "Fitness Goal", "workouts_per_week": "Workouts/Week"},
         ),
-        "Subscription Intent": px.histogram(df_filtered, x="subscribe_intent"),
-        "Eco Pack Score": px.histogram(df_filtered, x="eco_pack_score"),
+        "Subscription Intent": px.histogram(viz_df, x="subscribe_intent", labels={"subscribe_intent": "Subscribe Intent"}),
+        "Eco Pack Score": px.histogram(viz_df, x="eco_pack_score", labels={"eco_pack_score": "Eco Pack Score"}),
         "Distance vs Spend": px.scatter(
-            df_filtered, x="distance_km", y="avg_spend_aed",
+            viz_df,
+            x="distance_km",
+            y="avg_spend_aed",
             labels={"distance_km": "Distance (km)", "avg_spend_aed": "Avg Spend (AED)"},
         ),
-        "Spice Preference": px.histogram(df_filtered, x="spice_level"),
-        "Pause Likelihood": px.histogram(df_filtered, x="pause_likelihood"),
+        "Spice Preference": px.histogram(viz_df, x="spice_level", labels={"spice_level": "Spice Level"}),
+        "Pause Likelihood": px.histogram(viz_df, x="pause_likelihood", labels={"pause_likelihood": "Pause Likelihood"}),
     }
 
     cols = st.columns(2)
@@ -188,36 +241,36 @@ with tabs[0]:
 # ------------------------------------------------------------------
 with tabs[1]:
     st.header("Binary Classification – Subscribe Intent")
-
     target_col = "subscribe_intent"
     X, y = split_xy(df_filtered, target_col)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, stratify=y if len(y.unique()) > 1 else None, random_state=42
+        X,
+        y,
+        test_size=0.25,
+        stratify=y if len(y.unique()) > 1 else None,
+        random_state=42,
     )
 
     models, metrics = build_classification_models(X, y)
 
     st.subheader("Model Performance")
     st.dataframe(
-        pd.DataFrame(metrics).T.round(3).reset_index().rename(columns={"index": "Model"}),
+        pd.DataFrame(metrics)
+        .T.round(3)
+        .reset_index()
+        .rename(columns={"index": "Model"}),
         use_container_width=True,
     )
 
-    # -------- Confusion Matrix --------
     st.subheader("Explore Confusion Matrix")
     chosen_model = st.selectbox("Select model", list(models.keys()), key="confmat_mod")
-    # Dynamic labels based on actual classes present
     labels_present = np.unique(np.concatenate([y_test, models[chosen_model].predict(X_test)]))
     cm = confusion_matrix(y_test, models[chosen_model].predict(X_test), labels=labels_present)
     st.plotly_chart(plot_conf_matrix(cm, labels_present), use_container_width=True)
 
-      # -------- ROC Curves (only if test set has both classes) -----
     st.subheader("ROC Curve Comparison")
     if len(np.unique(y_test)) < 2:
-        st.info(
-            "ROC curve cannot be plotted because the test set contains "
-            "only one class after filtering."
-        )
+        st.info("ROC curve cannot be plotted because the test set contains only one class after filtering.")
     else:
         lb = LabelBinarizer()
         y_test_bin = lb.fit_transform(y_test).ravel()
@@ -225,61 +278,38 @@ with tabs[1]:
 
         roc_fig = go.Figure()
         skipped = []
-
         for name, mdl in models.items():
-            # If the positive class wasn’t seen in training, skip
             if pos_class not in mdl.classes_:
                 skipped.append(name)
                 continue
-
             pos_idx = list(mdl.classes_).index(pos_class)
             probs = mdl.predict_proba(X_test)[:, pos_idx]
-
-            # Guard: ensure length match
             if len(probs) != len(y_test_bin):
                 skipped.append(name)
                 continue
-
             fpr, tpr, _ = roc_curve(y_test_bin, probs, pos_label=1)
             roc_fig.add_trace(
-                go.Scatter(
-                    x=fpr,
-                    y=tpr,
-                    mode="lines",
-                    name=f"{name} (AUC={auc(fpr, tpr):.2f})",
-                )
+                go.Scatter(x=fpr, y=tpr, mode="lines", name=f"{name} (AUC={auc(fpr, tpr):.2f})")
             )
-
-        if roc_fig.data:  # at least one line added
-            roc_fig.update_layout(
-                xaxis_title="False Positive Rate",
-                yaxis_title="True Positive Rate",
-                title="ROC Curves",
-            )
+        if roc_fig.data:
+            roc_fig.update_layout(xaxis_title="False Positive Rate", yaxis_title="True Positive Rate", title="ROC Curves")
             st.plotly_chart(roc_fig, use_container_width=True)
         else:
             st.info("No models could be plotted on the ROC curve.")
         if skipped:
             st.caption(f"Skipped ROC for: {', '.join(skipped)} (length/class mismatch)")
 
-    # -------- New-data predictions ------------------------------
     st.subheader("Predict New Data")
-    pred_upload = st.file_uploader(
-        "Upload CSV without target column", type="csv", key="pred_upl"
-    )
+    pred_upload = st.file_uploader("Upload CSV without target column", type="csv", key="pred_upl")
     if pred_upload is not None:
         new_df = pd.read_csv(pred_upload)
         model_for_pred = st.selectbox("Model for prediction", list(models.keys()), key="pred_mod")
         new_df["predicted_subscribe_intent"] = models[model_for_pred].predict(new_df)
         st.write(new_df.head())
-        st.download_button(
-            "⬇︎ Download Predictions",
-            data=new_df.to_csv(index=False).encode(),
-            file_name="predictions.csv",
-        )
+        st.download_button("⬇︎ Download Predictions", data=new_df.to_csv(index=False).encode(), file_name="predictions.csv")
 
 # ------------------------------------------------------------------
-# 3 – Clustering
+# 3 – Clustering (unchanged)
 # ------------------------------------------------------------------
 with tabs[2]:
     st.header("Customer Segmentation – K-Means")
@@ -322,11 +352,12 @@ with tabs[2]:
         file_name="clustered_data.csv",
     )
 
+
 # ------------------------------------------------------------------
-# 4 – Association Rules   
+# 4 – Association Rules (unchanged)
 # ------------------------------------------------------------------
 with tabs[3]:
-    st.header("Market Basket / Association Rule Mining")
+     st.header("Market Basket / Association Rule Mining")
 
     # ① Let the user pick ANY ≥2 categorical columns
     cat_cols = df_filtered.select_dtypes(include="object").columns.tolist()
@@ -383,12 +414,11 @@ with tabs[3]:
                     use_container_width=True,
                 )
 
-
 # ------------------------------------------------------------------
-# 5 – Regression Insights
+# 5 – Regression Insights (unchanged)
 # ------------------------------------------------------------------
 with tabs[4]:
-    st.header("Value Prediction – Regression Models")
+        st.header("Value Prediction – Regression Models")
 
     target_reg = "avg_spend_aed"
     Xr, yr = split_xy(df_filtered, target_reg)
