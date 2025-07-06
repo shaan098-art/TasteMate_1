@@ -157,7 +157,7 @@ tabs = st.tabs(
 # 1 – Data Visualisation (with human-readable labels)
 # ------------------------------------------------------------------
 with tabs[0]:
-    st.header("Interactive Exploratory Analysis")
+    st.header("🍝 TasteMate - Interactive Exploratory Analysis")
 
     # Mapping dictionaries
     age_labels = {
@@ -432,7 +432,7 @@ with tabs[3]:
 # 5 – Regression Insights
 # ------------------------------------------------------------------
 with tabs[4]:
-    st.header("Value Prediction – Regression Models")
+    st.header("Value Prediction for Average Spend – Regression Models")
 
     target_r = "avg_spend_aed"
     Xr, yr = split_xy(df_filtered, target_r)
