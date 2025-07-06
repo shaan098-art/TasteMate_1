@@ -17,10 +17,7 @@ import streamlit as st
 from mlxtend.frequent_patterns import apriori, association_rules
 from sklearn.cluster import KMeans
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import (
-    GradientBoostingClassifier,
-    RandomForestClassifier,
-)
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.metrics import (
     accuracy_score,
@@ -34,11 +31,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (
-    OneHotEncoder,
-    StandardScaler,
-    LabelBinarizer,
-)
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelBinarizer
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 # ------------------------------------------------------------------
@@ -54,6 +47,7 @@ def load_data(uploaded: io.BytesIO | None = None) -> pd.DataFrame:
     if uploaded:
         return pd.read_csv(uploaded)
     return pd.read_csv("cloud_kitchen_survey_synthetic.csv")
+
 
 # ------------------------------------------------------------------
 # Build classification models
@@ -90,17 +84,12 @@ def build_classification_models(X: pd.DataFrame, y: pd.Series):
         metrics[name] = {
             "Train Acc": model.score(X_train, y_train),
             "Test Acc": accuracy_score(y_test, preds),
-            "Precision": precision_score(
-                y_test, preds, average="weighted", zero_division=0
-            ),
-            "Recall": recall_score(
-                y_test, preds, average="weighted", zero_division=0
-            ),
-            "F1": f1_score(
-                y_test, preds, average="weighted", zero_division=0
-            ),
+            "Precision": precision_score(y_test, preds, average="weighted", zero_division=0),
+            "Recall": recall_score(y_test, preds, average="weighted", zero_division=0),
+            "F1": f1_score(y_test, preds, average="weighted", zero_division=0),
         }
     return models, metrics
+
 
 # ------------------------------------------------------------------
 # Confusion matrix helper
@@ -121,12 +110,14 @@ def plot_conf_matrix(cm: np.ndarray, labels: list[str]) -> go.Figure:
     )
     return fig
 
+
 # ------------------------------------------------------------------
 # Split X/y helper
 # ------------------------------------------------------------------
 def split_xy(df: pd.DataFrame, target: str):
     df2 = df.dropna(subset=[target])
     return df2.drop(columns=[target]), df2[target]
+
 
 # ------------------------------------------------------------------
 # Sidebar – Data & filters
@@ -147,6 +138,7 @@ df_filtered = df[
     df["gender"].isin(gender_filter) & df["diet_style"].isin(diet_filter)
 ]
 
+
 # ------------------------------------------------------------------
 # Main tabs
 # ------------------------------------------------------------------
@@ -159,6 +151,7 @@ tabs = st.tabs(
         "📈 Regression Insights",
     ]
 )
+
 
 # ------------------------------------------------------------------
 # 1 – Data Visualisation (with human-readable labels)
@@ -273,6 +266,7 @@ with tabs[0]:
         cols[idx].plotly_chart(fig, use_container_width=True)
         idx = 1 - idx
 
+
 # ------------------------------------------------------------------
 # 2 – Classification
 # ------------------------------------------------------------------
@@ -350,65 +344,41 @@ with tabs[1]:
             st.plotly_chart(roc_fig, use_container_width=True)
         else:
             st.info("No models could be plotted on the ROC curve.")
-
         if skipped:
             st.caption(f"Skipped ROC for: {', '.join(skipped)}")
 
-    st.subheader("Predict New Data")
-    pred_up = st.file_uploader(
-        "Upload CSV without target column", type="csv", key="pred_upl"
-    )
-    if pred_up:
-        new_df = pd.read_csv(pred_up)
-        model_name = st.selectbox(
-            "Model for prediction", list(models.keys()), key="pred_mod"
-        )
-        new_df["predicted_subscribe_intent"] = models[model_name].predict(new_df)
-        st.write(new_df.head())
-        st.download_button(
-            "⬇︎ Download Predictions",
-            data=new_df.to_csv(index=False).encode(),
-            file_name="predictions.csv",
-        )
-
 
 # ------------------------------------------------------------------
-# 3 – Clustering (unchanged)
+# 3 – Clustering
 # ------------------------------------------------------------------
 with tabs[2]:
     st.header("Customer Segmentation – K-Means")
 
     num_cols = df_filtered.select_dtypes(exclude="object").columns.tolist()
-    chosen_features = st.multiselect(
-        "Numeric features for clustering",
-        num_cols,
-        default=["orders_per_week", "avg_spend_aed", "distance_km"],
+    features = st.multiselect(
+        "Numeric features for clustering", num_cols, default=num_cols[:3]
     )
-    k_val = st.slider("Number of clusters (k)", 2, 10, 3, 1)
+    k = st.slider("Number of clusters (k)", 2, 10, 3, 1)
 
-    # Elbow chart
     sse = []
-    for k in range(2, 11):
-        km = KMeans(n_clusters=k, n_init="auto", random_state=42).fit(
-            df_filtered[chosen_features]
+    for i in range(2, 11):
+        km = KMeans(n_clusters=i, n_init="auto", random_state=42).fit(
+            df_filtered[features]
         )
         sse.append(km.inertia_)
-    elbow_fig = go.Figure(
+    elbow = go.Figure(
         data=go.Scatter(x=list(range(2, 11)), y=sse, mode="lines+markers")
     )
-    elbow_fig.update_layout(title="Elbow Chart", xaxis_title="k", yaxis_title="SSE")
-    st.plotly_chart(elbow_fig, use_container_width=True)
+    elbow.update_layout(title="Elbow Chart", xaxis_title="k", yaxis_title="SSE")
+    st.plotly_chart(elbow, use_container_width=True)
 
-    # Final clustering
-    km_final = KMeans(n_clusters=k_val, n_init="auto", random_state=42)
+    km_final = KMeans(n_clusters=k, n_init="auto", random_state=42)
     df_clustered = df_filtered.copy()
-    df_clustered["cluster"] = km_final.fit_predict(df_filtered[chosen_features])
+    df_clustered["cluster"] = km_final.fit_predict(df_filtered[features])
 
     st.subheader("Cluster Personas (Feature Means)")
-    st.dataframe(
-        df_clustered.groupby("cluster")[chosen_features].mean().round(1),
-        use_container_width=True,
-    )
+    persona = df_clustered.groupby("cluster")[features].mean().round(1)
+    st.dataframe(persona, use_container_width=True)
 
     st.download_button(
         "⬇︎ Download cluster-labelled data",
@@ -418,59 +388,38 @@ with tabs[2]:
 
 
 # ------------------------------------------------------------------
-# 4 – Association Rules (unchanged)
+# 4 – Association Rules
 # ------------------------------------------------------------------
 with tabs[3]:
-     st.header("Market Basket / Association Rule Mining")
+    st.header("Market Basket / Association Rule Mining")
 
-    # ① Let the user pick ANY ≥2 categorical columns
     cat_cols = df_filtered.select_dtypes(include="object").columns.tolist()
-    st.info("Select **two or more** categorical columns to mine cross-attribute patterns.")
-    assoc_cols = st.multiselect("Choose columns", cat_cols, default=cat_cols[:3])
+    st.info("Select two or more categorical columns.")
+    cols_choice = st.multiselect("Choose columns", cat_cols, default=cat_cols[:2])
 
-    if len(assoc_cols) < 2:
-        st.warning("Please select at least two categorical columns.")
+    if len(cols_choice) < 2:
+        st.warning("Please select at least two columns.")
     else:
-        # ② One-hot encode each col=value pair → suitable for apriori
-        trans_ohe = pd.get_dummies(df_filtered[assoc_cols].astype(str))
+        trans_ohe = pd.get_dummies(df_filtered[cols_choice].astype(str))
 
-        # ③ User-tunable thresholds
         min_sup = st.slider("Min support", 0.01, 0.5, 0.05, 0.01)
-        min_conf = st.slider("Min confidence", 0.10, 1.00, 0.60, 0.05)
+        min_conf = st.slider("Min confidence", 0.1, 1.0, 0.6, 0.05)
         min_lift = st.slider("Min lift", 1.0, 10.0, 1.0, 0.1)
 
-        # ④ Mine frequent itemsets
         frequent = apriori(trans_ohe, min_support=min_sup, use_colnames=True)
 
         if frequent.empty:
-            st.warning(
-                "No frequent itemsets found with the current support threshold. "
-                "Try reducing *Min support* or selecting additional columns."
-            )
+            st.warning("No frequent itemsets found. Lower support or add columns.")
         else:
-            # ⑤ Generate association rules
-            rules = association_rules(
-                frequent, metric="confidence", min_threshold=min_conf
-            )
+            rules = association_rules(frequent, metric="confidence", min_threshold=min_conf)
             rules = rules[rules["lift"] >= min_lift]
 
             if rules.empty:
-                st.warning(
-                    "No association rules meet the chosen confidence/lift thresholds."
-                )
+                st.warning("No rules meet confidence/lift thresholds.")
             else:
-                # Human-readable antecedent/consequent strings
-                rules["antecedents"] = rules["antecedents"].apply(
-                    lambda x: ", ".join(list(x))
-                )
-                rules["consequents"] = rules["consequents"].apply(
-                    lambda x: ", ".join(list(x))
-                )
-                rules = (
-                    rules.sort_values("confidence", ascending=False)
-                    .head(10)
-                    .reset_index(drop=True)
-                )
+                rules["antecedents"] = rules["antecedents"].apply(lambda x: ", ".join(x))
+                rules["consequents"] = rules["consequents"].apply(lambda x: ", ".join(x))
+                rules = rules.sort_values("confidence", ascending=False).head(10).reset_index(drop=True)
 
                 st.subheader("Top-10 Rules")
                 st.dataframe(
@@ -478,24 +427,25 @@ with tabs[3]:
                     use_container_width=True,
                 )
 
+
 # ------------------------------------------------------------------
-# 5 – Regression Insights (unchanged)
+# 5 – Regression Insights
 # ------------------------------------------------------------------
 with tabs[4]:
-        st.header("Value Prediction – Regression Models")
+    st.header("Value Prediction – Regression Models")
 
-    target_reg = "avg_spend_aed"
-    Xr, yr = split_xy(df_filtered, target_reg)
+    target_r = "avg_spend_aed"
+    Xr, yr = split_xy(df_filtered, target_r)
     Xr_train, Xr_test, yr_train, yr_test = train_test_split(
         Xr, yr, test_size=0.25, random_state=42
     )
 
-    cat_cols_r = Xr.select_dtypes(include="object").columns.tolist()
-    num_cols_r = Xr.select_dtypes(exclude="object").columns.tolist()
+    cat_r = Xr.select_dtypes(include="object").columns.tolist()
+    num_r = Xr.select_dtypes(exclude="object").columns.tolist()
 
     reg_prep = ColumnTransformer(
-        [("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols_r),
-         ("num", StandardScaler(), num_cols_r)]
+        [("cat", OneHotEncoder(handle_unknown="ignore"), cat_r),
+         ("num", StandardScaler(), num_r)]
     )
 
     def rpipe(model):
@@ -508,7 +458,8 @@ with tabs[4]:
         "Decision Tree": rpipe(DecisionTreeRegressor(max_depth=6)),
     }
 
-    reg_metrics, preds_dict = {}, {}
+    reg_metrics = {}
+    preds_dict = {}
     for name, mdl in reg_models.items():
         mdl.fit(Xr_train, yr_train)
         preds = mdl.predict(Xr_test)
@@ -527,19 +478,23 @@ with tabs[4]:
 
     st.subheader("Predicted vs Actual")
     cols_reg = st.columns(len(reg_models))
-    for idx, (name, preds) in enumerate(preds_dict.items()):
+    for i, (name, preds) in enumerate(preds_dict.items()):
         fig = px.scatter(
-            x=yr_test, y=preds,
+            x=yr_test,
+            y=preds,
             labels={"x": "Actual", "y": "Predicted"},
             title=name,
         )
         fig.add_shape(
             type="line",
-            x0=yr_test.min(), y0=yr_test.min(),
-            x1=yr_test.max(), y1=yr_test.max(),
+            x0=yr_test.min(),
+            y0=yr_test.min(),
+            x1=yr_test.max(),
+            y1=yr_test.max(),
             line=dict(dash="dash"),
         )
-        cols_reg[idx].plotly_chart(fig, use_container_width=True)
+        cols_reg[i].plotly_chart(fig, use_container_width=True)
+
 
 # ------------------------------------------------------------------
 # Footer
