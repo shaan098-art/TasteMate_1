@@ -50,20 +50,22 @@ def load_data(uploaded: io.BytesIO | None = None) -> pd.DataFrame:
     )
 
 # ------------------------------------------------------------------
-# Model builder
+# Build classification models
 # ------------------------------------------------------------------
 @st.cache_resource
 def build_classification_models(X: pd.DataFrame, y: pd.Series):
     """
     Train four classifiers, return fitted models + metrics.
-    Weighted averages ensure metrics always compute even if only one class appears.
+    Uses weighted averages so metrics work even if only one class appears.
     """
     cat_cols = X.select_dtypes(include="object").columns.tolist()
     num_cols = X.select_dtypes(exclude="object").columns.tolist()
 
     preproc = ColumnTransformer(
-        [("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols),
-         ("num", StandardScaler(), num_cols)],
+        [
+            ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols),
+            ("num", StandardScaler(), num_cols),
+        ],
         remainder="drop",
     )
 
@@ -91,7 +93,7 @@ def build_classification_models(X: pd.DataFrame, y: pd.Series):
     return models, metrics
 
 # ------------------------------------------------------------------
-# Helper – confusion-matrix plot
+# Confusion-matrix plot helper
 # ------------------------------------------------------------------
 def plot_conf_matrix(cm: np.ndarray, labels: list[str]) -> go.Figure:
     fig = go.Figure(
@@ -108,7 +110,7 @@ def plot_conf_matrix(cm: np.ndarray, labels: list[str]) -> go.Figure:
     return fig
 
 # ------------------------------------------------------------------
-# Helper – split X / y
+# Split X / y helper
 # ------------------------------------------------------------------
 def split_xy(df: pd.DataFrame, target: str):
     df2 = df.dropna(subset=[target])
@@ -134,31 +136,30 @@ df_filtered = df[
 ]
 
 # ------------------------------------------------------------------
-# Tabs
+# Main Tabs
 # ------------------------------------------------------------------
 tabs = st.tabs(
     ["🔎 Data Visualisation", "🤖 Classification", "🧩 Clustering", "🛒 Association Rules", "📈 Regression Insights"]
 )
 
 # ------------------------------------------------------------------
-# 1 – Data Visualisation (updated labels)
+# 1 – Data Visualisation (with human-readable labels)
 # ------------------------------------------------------------------
 with tabs[0]:
     st.header("Interactive Exploratory Analysis")
 
-    # ─── Mapping codes to human-readable labels ──────────────────────
+    # 1) Mapping dictionaries covering all codes actually in the data
     age_labels = {
         1: "18–24",
         2: "25–34",
         3: "35–44",
         4: "45–54",
-        5: "55–64",
-        6: "65+",
+        5: "55+",
     }
     gender_map = {
         1: "Women",
         2: "Men",
-        3: "Non-binary",
+        3: "Other",
         4: "Prefer not to say",
     }
     diet_map = {
@@ -167,74 +168,103 @@ with tabs[0]:
         3: "Vegan",
         4: "Pescatarian",
         5: "Keto",
+        6: "Low-carb",
+        7: "Paleo",
     }
 
-    # Make a working copy with new label columns
+    # 2) Create a copy and add label columns (cast codes to int first)
     viz_df = df_filtered.copy()
-    viz_df["Age Group"] = viz_df["age_group"].map(age_labels)
-    viz_df["Gender"] = viz_df["gender"].map(gender_map)
-    viz_df["Diet Style"] = viz_df["diet_style"].map(diet_map)
+    viz_df["Age Group Label"] = viz_df["age_group"].astype(int).map(age_labels)
+    viz_df["Gender Label"]    = viz_df["gender"].astype(int).map(gender_map)
+    viz_df["Diet Style Label"] = viz_df["diet_style"].astype(int).map(diet_map)
 
-    # Prepare Diet Style counts
+    # 3) Prepare diet counts for the bar chart
     diet_counts = (
-        viz_df["Diet Style"]
+        viz_df["Diet Style Label"]
         .value_counts()
+        .reindex(list(diet_map.values()), fill_value=0)
         .reset_index(name="Count")
         .rename(columns={"index": "Diet Style"})
     )
 
-    # Build all 10 charts with updated labels
+    # 4) Build all 10 plots, referencing the new label columns
     insights = {
         "Age Distribution": px.histogram(
             viz_df,
-            x="Age Group",
-            category_orders={"Age Group": list(age_labels.values())},
-            labels={"Age Group": "Age Group"},
+            x="Age Group Label",
+            category_orders={"Age Group Label": list(age_labels.values())},
+            labels={"Age Group Label": "Age Group"},
         ),
         "Gender Split": px.pie(
             viz_df,
-            names="Gender",
+            names="Gender Label",
             hole=0.4,
         ),
         "Diet Style Popularity": px.bar(
             diet_counts,
             x="Diet Style",
             y="Count",
-            labels={"Diet Style": "Diet Style", "Count": "Count"},
+            category_orders={"Diet Style": list(diet_map.values())},
+            labels={"Count": "Count"},
         ),
         "Spend vs Orders": px.scatter(
             viz_df,
             x="orders_per_week",
             y="avg_spend_aed",
             size="avg_spend_aed",
-            color="Diet Style",
-            labels={"orders_per_week": "Orders/Week", "avg_spend_aed": "Avg Spend (AED)"},
+            color="Diet Style Label",
+            labels={
+                "orders_per_week": "Orders/Week",
+                "avg_spend_aed": "Avg Spend (AED)",
+                "Diet Style Label": "Diet Style",
+            },
         ),
         "Workout vs Goal": px.box(
             viz_df,
             x="fitness_goal",
             y="workouts_per_week",
-            color="Gender",
-            labels={"fitness_goal": "Fitness Goal", "workouts_per_week": "Workouts/Week"},
+            color="Gender Label",
+            labels={
+                "fitness_goal": "Fitness Goal",
+                "workouts_per_week": "Workouts/Week",
+                "Gender Label": "Gender",
+            },
         ),
-        "Subscription Intent": px.histogram(viz_df, x="subscribe_intent", labels={"subscribe_intent": "Subscribe Intent"}),
-        "Eco Pack Score": px.histogram(viz_df, x="eco_pack_score", labels={"eco_pack_score": "Eco Pack Score"}),
+        "Subscription Intent": px.histogram(
+            viz_df,
+            x="subscribe_intent",
+            labels={"subscribe_intent": "Subscribe Intent"},
+        ),
+        "Eco Pack Score": px.histogram(
+            viz_df,
+            x="eco_pack_score",
+            labels={"eco_pack_score": "Eco Pack Score"},
+        ),
         "Distance vs Spend": px.scatter(
             viz_df,
             x="distance_km",
             y="avg_spend_aed",
             labels={"distance_km": "Distance (km)", "avg_spend_aed": "Avg Spend (AED)"},
         ),
-        "Spice Preference": px.histogram(viz_df, x="spice_level", labels={"spice_level": "Spice Level"}),
-        "Pause Likelihood": px.histogram(viz_df, x="pause_likelihood", labels={"pause_likelihood": "Pause Likelihood"}),
+        "Spice Preference": px.histogram(
+            viz_df,
+            x="spice_level",
+            labels={"spice_level": "Spice Level"},
+        ),
+        "Pause Likelihood": px.histogram(
+            viz_df,
+            x="pause_likelihood",
+            labels={"pause_likelihood": "Pause Likelihood"},
+        ),
     }
 
+    # 5) Display in two columns
     cols = st.columns(2)
     idx = 0
     for title, fig in insights.items():
         cols[idx].subheader(title)
         cols[idx].plotly_chart(fig, use_container_width=True)
-        idx = 1 - idx  # alternate columns
+        idx = 1 - idx
 
 # ------------------------------------------------------------------
 # 2 – Classification
@@ -264,13 +294,19 @@ with tabs[1]:
 
     st.subheader("Explore Confusion Matrix")
     chosen_model = st.selectbox("Select model", list(models.keys()), key="confmat_mod")
-    labels_present = np.unique(np.concatenate([y_test, models[chosen_model].predict(X_test)]))
-    cm = confusion_matrix(y_test, models[chosen_model].predict(X_test), labels=labels_present)
+    labels_present = np.unique(
+        np.concatenate([y_test, models[chosen_model].predict(X_test)])
+    )
+    cm = confusion_matrix(
+        y_test, models[chosen_model].predict(X_test), labels=labels_present
+    )
     st.plotly_chart(plot_conf_matrix(cm, labels_present), use_container_width=True)
 
     st.subheader("ROC Curve Comparison")
     if len(np.unique(y_test)) < 2:
-        st.info("ROC curve cannot be plotted because the test set contains only one class after filtering.")
+        st.info(
+            "ROC curve cannot be plotted because the test set contains only one class after filtering."
+        )
     else:
         lb = LabelBinarizer()
         y_test_bin = lb.fit_transform(y_test).ravel()
@@ -289,10 +325,20 @@ with tabs[1]:
                 continue
             fpr, tpr, _ = roc_curve(y_test_bin, probs, pos_label=1)
             roc_fig.add_trace(
-                go.Scatter(x=fpr, y=tpr, mode="lines", name=f"{name} (AUC={auc(fpr, tpr):.2f})")
+                go.Scatter(
+                    x=fpr,
+                    y=tpr,
+                    mode="lines",
+                    name=f"{name} (AUC={auc(fpr, tpr):.2f})",
+                )
             )
+
         if roc_fig.data:
-            roc_fig.update_layout(xaxis_title="False Positive Rate", yaxis_title="True Positive Rate", title="ROC Curves")
+            roc_fig.update_layout(
+                xaxis_title="False Positive Rate",
+                yaxis_title="True Positive Rate",
+                title="ROC Curves",
+            )
             st.plotly_chart(roc_fig, use_container_width=True)
         else:
             st.info("No models could be plotted on the ROC curve.")
@@ -300,13 +346,22 @@ with tabs[1]:
             st.caption(f"Skipped ROC for: {', '.join(skipped)} (length/class mismatch)")
 
     st.subheader("Predict New Data")
-    pred_upload = st.file_uploader("Upload CSV without target column", type="csv", key="pred_upl")
+    pred_upload = st.file_uploader(
+        "Upload CSV without target column", type="csv", key="pred_upl"
+    )
     if pred_upload is not None:
         new_df = pd.read_csv(pred_upload)
-        model_for_pred = st.selectbox("Model for prediction", list(models.keys()), key="pred_mod")
+        model_for_pred = st.selectbox(
+            "Model for prediction", list(models.keys()), key="pred_mod"
+        )
         new_df["predicted_subscribe_intent"] = models[model_for_pred].predict(new_df)
         st.write(new_df.head())
-        st.download_button("⬇︎ Download Predictions", data=new_df.to_csv(index=False).encode(), file_name="predictions.csv")
+        st.download_button(
+            "⬇︎ Download Predictions",
+            data=new_df.to_csv(index=False).encode(),
+            file_name="predictions.csv",
+        )
+
 
 # ------------------------------------------------------------------
 # 3 – Clustering (unchanged)
